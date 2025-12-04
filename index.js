@@ -1,8 +1,25 @@
 require('dotenv').config();
-const { httpServer } = require('./app');
+const redis = require('./utilites/redis');
+const app = require('./app');
+const { createServer } = require('http');
+const setupSocket = require('./socket');
 
-const PORT = process.env.PORT || 3002; // Default to 3002 to avoid conflict with User Service (usually 3000/3001)
+const PORT = process.env.PORT || 8080;
+const httpServer = createServer(app);
 
-httpServer.listen(PORT, () => {
-  console.log(`Communication Service running on port ${PORT}`);
-});
+// attach socket
+setupSocket(httpServer);
+
+(async () => {
+  try {
+    await redis.connect();
+    console.log('Connected to Redis');
+
+    httpServer.listen(PORT, () => {
+      console.log(`Communication Service running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to start:', err.message);
+    process.exit(1);
+  }
+})();
