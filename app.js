@@ -2,11 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
+const routes = require('./routes');
+const { commonErrorHandler } = require('./utilites/errorHandler');
+const { ping } = require('./utilites/redis');
+const prisma = require('./utilites/prisma');
 
 const app = express();
-const httpServer = createServer(app);
 
 // Middleware
 app.use(helmet());
@@ -14,51 +15,27 @@ app.use(cors());
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.disable('x-powered-by');
 
-// Socket.io setup
-const io = new Server(httpServer, {
-  cors: {
-    origin: '*', // Allow all origins for now, configure as needed
-    methods: ['GET', 'POST'],
-  },
+// Health API
+app.use('/health', async (_req, res) => {
+  try {
+    const [results] = await prisma.$queryRaw`SELECT NOW() as current_time`;
+    const redisPing = await ping();
+    return res.send({
+      message: 'Application running successfully!',
+      uptime: process.uptime(),
+      database: results.current_time,
+      redis: redisPing,
+    });
+  } catch (error) {
+    return commonErrorHandler(_req, res, error.message, 400);
+  }
 });
 
-// Socket.io authentication middleware (optional, if you want to verify token on connection)
-// io.use((socket, next) => {
-//   // Implement socket auth here using verifyToken from jwtHelper
-//   next();
-// });
+// REST Routes
+routes.registerRoutes(app);
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+app.use((req, res) => commonErrorHandler(req, res, 'Invalid endpoint', 404));
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-  });
-
-  // Example: Join a conversation room
-  socket.on('join_conversation', (conversationId) => {
-    socket.join(conversationId);
-    console.log(`User ${socket.id} joined conversation ${conversationId}`);
-  });
-
-  // Example: Send message
-  socket.on('send_message', (data) => {
-    // data should contain conversationId, content, etc.
-    // Save to DB (using controller/service) and emit to room
-    io.to(data.conversationId).emit('receive_message', data);
-  });
-});
-
-// Routes
-// app.use('/api/v1', routes);
-
-// Health check
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'Communication Service' });
-});
-
-// Error handling
-// app.use(commonErrorHandler);
-
-module.exports = { app, httpServer, io };
+module.exports = app;

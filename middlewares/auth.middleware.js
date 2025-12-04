@@ -20,6 +20,24 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+const socketAuthMiddleware = (socket, next) => {
+  const token = socket.handshake.auth?.token;
+
+  if (!token) {
+    return next(new Error('Authorization token is required'));
+  }
+
+  try {
+    const decoded = verifyToken(token);
+    socket.user = decoded;
+    next();
+  } catch (error) {
+    console.error('Error while verifying token:', error.message);
+    return next(new Error('Invalid or expired token'));
+  }
+};
+
 module.exports = {
   authMiddleware,
+  socketAuthMiddleware,
 };
