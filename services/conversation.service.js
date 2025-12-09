@@ -43,23 +43,71 @@ const createConversation = async (payload) => {
   return newConv;
 };
 
-const getConversations = async (user) => {
-  const userId = user.id;
+const getConversations = async ({ userId, page = 1, limit = 20 }) => {
+  page = parseInt(page, 10);
+  limit = parseInt(limit, 10);
+  const skip = (page - 1) * limit;
 
-  return prisma.conversation.findMany({
-    where: {
-      participants: {
-        some: { userId },
+  const [conversations, total] = await Promise.all([
+    prisma.conversation.findMany({
+      where: {
+        participants: {
+          some: { userId: Number(userId) },
+        },
       },
-    },
-    orderBy: { updatedAt: 'desc' },
-    include: {
-      participants: true,
-    },
-  });
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        participants: true,
+      },
+    }),
+    prisma.conversation.count({
+      where: {
+        participants: {
+          some: { userId: Number(userId) },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    page,
+    limit,
+    total,
+    hasMore: total > page * limit,
+    conversations,
+  };
+};
+
+const getChatMessages = async ({ conversationId, page = 1, limit = 20 }) => {
+  page = parseInt(page, 10);
+  limit = parseInt(limit, 10);
+  const skip = (page - 1) * limit;
+
+  const [messages, total] = await Promise.all([
+    prisma.message.findMany({
+      where: { conversationId: Number(conversationId) },
+      orderBy: { createdAt: 'asc' },
+      skip,
+      take: limit,
+    }),
+    prisma.message.count({
+      where: { conversationId: Number(conversationId) },
+    }),
+  ]);
+
+  return {
+    page,
+    limit,
+    total,
+    hasMore: total > page * limit,
+    messages,
+  };
 };
 
 module.exports = {
   createConversation,
   getConversations,
+  getChatMessages,
 };
