@@ -2,7 +2,7 @@ require('dotenv').config();
 const redis = require('./utilites/redis');
 const app = require('./app');
 const { createServer } = require('http');
-const setupSocket = require('./socket');
+const { setupSocket } = require('./utilites/socket');
 
 const PORT = process.env.PORT || 8080;
 const httpServer = createServer(app);

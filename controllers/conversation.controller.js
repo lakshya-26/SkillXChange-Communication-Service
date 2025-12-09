@@ -19,7 +19,11 @@ const createConversation = async (req, res, next) => {
 
 const getConversations = async (req, res, next) => {
   try {
-    const conversations = await conversationService.getConversations(req.user);
+    const payload = {
+      ...req.user,
+      ...req.query,
+    };
+    const conversations = await conversationService.getConversations(payload);
     req.data = conversations;
     req.statusCode = 200;
     next();
@@ -29,7 +33,23 @@ const getConversations = async (req, res, next) => {
   }
 };
 
+const getChatMessages = async (req, res, next) => {
+  try {
+    const payload = {
+      ...req.params,
+      ...req.query,
+    };
+    const messages = await conversationService.getChatMessages(payload);
+    req.data = messages;
+    req.statusCode = 200;
+    next();
+  } catch (error) {
+    console.error('Message fetch error', error);
+  }
+};
+
 module.exports = {
   createConversation,
   getConversations,
+  getChatMessages,
 };

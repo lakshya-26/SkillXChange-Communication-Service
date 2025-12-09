@@ -16,6 +16,9 @@ const get = (key) => {
 };
 
 const set = (key, value, timeout = process.env.CACHE_TTL) => {
+  if (!timeout) {
+    return client.set(key, value);
+  }
   return client.set(key, value, { EX: timeout });
 };
 
