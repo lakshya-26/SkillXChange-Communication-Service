@@ -7,7 +7,12 @@ const sendMessageSchema = Joi.object({
   content: Joi.string().required(),
 });
 
+const typingSchema = Joi.object({
+  conversationId: Joi.number().integer().required(),
+});
+
 module.exports = {
   joinConversationSchema,
   sendMessageSchema,
+  typingSchema,
 };
