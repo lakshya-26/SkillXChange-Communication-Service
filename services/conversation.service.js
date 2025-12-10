@@ -71,7 +71,7 @@ const createConversation = async (payload) => {
   return newConv;
 };
 
-const getConversations = async ({ userId, page = 1, limit = 20 }) => {
+const getConversations = async ({ id, page = 1, limit = 20 }) => {
   page = parseInt(page, 10);
   limit = parseInt(limit, 10);
   const skip = (page - 1) * limit;
@@ -80,7 +80,7 @@ const getConversations = async ({ userId, page = 1, limit = 20 }) => {
     prisma.conversation.findMany({
       where: {
         participants: {
-          some: { userId: Number(userId) },
+          some: { userId: Number(id) },
         },
       },
       orderBy: { updatedAt: 'desc' },
@@ -92,7 +92,7 @@ const getConversations = async ({ userId, page = 1, limit = 20 }) => {
           select: {
             messages: {
               where: {
-                senderId: { not: Number(userId) },
+                senderId: { not: Number(id) },
                 readAt: null,
               },
             },
@@ -103,7 +103,7 @@ const getConversations = async ({ userId, page = 1, limit = 20 }) => {
     prisma.conversation.count({
       where: {
         participants: {
-          some: { userId: Number(userId) },
+          some: { userId: Number(id) },
         },
       },
     }),
@@ -113,7 +113,7 @@ const getConversations = async ({ userId, page = 1, limit = 20 }) => {
   const conversationList = await Promise.all(
     conversations.map(async (conv) => {
       // Find receiver
-      const receiver = conv.participants.find((p) => p.userId !== userId);
+      const receiver = conv.participants.find((p) => p.userId !== id);
       let isOnline = false;
       let lastSeen = null;
 
