@@ -19,6 +19,14 @@ router.get(
   sendResponse
 );
 router.get(
+  '/:conversationId',
+  authMiddleware,
+  conversationValidator.getChatMessagesParams, // reuse param validation
+  conversationController.getConversationById,
+  sendResponse
+);
+
+router.get(
   '/:conversationId/messages',
   authMiddleware,
   conversationValidator.getChatMessagesParams,

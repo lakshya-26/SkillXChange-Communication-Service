@@ -88,6 +88,10 @@ const getConversations = async ({ id, page = 1, limit = 20 }) => {
       take: limit,
       include: {
         participants: true,
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
         _count: {
           select: {
             messages: {
@@ -110,32 +114,37 @@ const getConversations = async ({ id, page = 1, limit = 20 }) => {
   ]);
 
   // Transform result to include unreadCount cleanly
-  const conversationList = await Promise.all(
-    conversations.map(async (conv) => {
-      // Find receiver
-      const receiver = conv.participants.find((p) => p.userId !== id);
-      let isOnline = false;
-      let lastSeen = null;
+  // Reuse transformation logic for single fetch too if needed
+  const transform = async (conv) => {
+    // Find receiver
+    const receiver = conv.participants.find((p) => p.userId !== Number(id));
+    let isOnline = false;
+    let lastSeen = null;
 
-      if (receiver) {
-        const online = await redis.get(`user:online:${receiver.userId}`);
-        isOnline = !!online;
-        if (!isOnline) {
-          lastSeen = await redis.get(`user:last_seen:${receiver.userId}`);
-        }
+    if (receiver) {
+      const online = await redis.get(`user:online:${receiver.userId}`);
+      isOnline = !!online;
+      if (!isOnline) {
+        lastSeen = await redis.get(`user:last_seen:${receiver.userId}`);
       }
+    }
 
-      return {
-        ...conv,
-        unreadCount: conv._count.messages,
-        _count: undefined,
-        receiver: {
-          ...receiver,
-          isOnline,
-          lastSeen,
-        },
-      };
-    })
+    return {
+      ...conv,
+      lastMessage: conv.messages?.[0] || null,
+      messages: undefined,
+      unreadCount: conv._count?.messages || 0,
+      _count: undefined,
+      receiver: {
+        ...receiver,
+        isOnline,
+        lastSeen,
+      },
+    };
+  };
+
+  const conversationList = await Promise.all(
+    conversations.map((conv) => transform(conv))
   );
 
   return {
@@ -173,8 +182,61 @@ const getChatMessages = async ({ conversationId, page = 1, limit = 20 }) => {
   };
 };
 
+const getConversationById = async (conversationId, userId) => {
+  const conv = await prisma.conversation.findFirst({
+    where: {
+      id: Number(conversationId),
+      participants: {
+        some: { userId: Number(userId) },
+      },
+    },
+    include: {
+      participants: true,
+      _count: {
+        select: {
+          messages: {
+            where: {
+              senderId: { not: Number(userId) },
+              readAt: null,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!conv) {
+    throw new CustomException('Conversation not found', 404);
+  }
+
+  // Manual transform logic reuse
+  const receiver = conv.participants.find((p) => p.userId !== Number(userId));
+  let isOnline = false;
+  let lastSeen = null;
+
+  if (receiver) {
+    const online = await redis.get(`user:online:${receiver.userId}`);
+    isOnline = !!online;
+    if (!isOnline && receiver.userId) {
+      lastSeen = await redis.get(`user:last_seen:${receiver.userId}`);
+    }
+  }
+
+  return {
+    ...conv,
+    unreadCount: conv._count?.messages || 0,
+    _count: undefined,
+    receiver: {
+      ...receiver,
+      isOnline,
+      lastSeen,
+    },
+  };
+};
+
 module.exports = {
   createConversation,
   getConversations,
   getChatMessages,
+  getConversationById,
 };

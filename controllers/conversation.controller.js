@@ -48,8 +48,26 @@ const getChatMessages = async (req, res, next) => {
   }
 };
 
+const getConversationById = async (req, res, next) => {
+  try {
+    const conversationId = req.params.conversationId;
+    const userId = req.user.id;
+    const conversation = await conversationService.getConversationById(
+      conversationId,
+      userId
+    );
+    req.data = conversation;
+    req.statusCode = 200;
+    next();
+  } catch (error) {
+    console.error('Get conversation error:', error);
+    commonErrorHandler(req, res, error.message, error.statusCode);
+  }
+};
+
 module.exports = {
   createConversation,
   getConversations,
   getChatMessages,
+  getConversationById,
 };
