@@ -53,3 +53,17 @@ enum MessageType {
   FILE
   SIGNAL // For WebRTC signaling later
 }
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  title     String?
+  body      String
+  type      String   @default("INFO") // e.g. "MATCH", "MESSAGE", "SYSTEM"
+  isRead    Boolean  @default(false)  @map("is_read")
+  relatedId Int?     @map("related_id") // e.g. conversationId
+  createdAt DateTime @default(now())  @map("created_at")
+  updatedAt DateTime @updatedAt       @map("updated_at")
+
+  @@map("notifications")
+}
