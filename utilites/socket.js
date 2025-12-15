@@ -6,6 +6,11 @@ const {
   createMessage,
   markMessagesAsRead,
 } = require('../services/message.service');
+const {
+  createNotification,
+  markNotificationsAsReadByRelatedId,
+} = require('../services/notification.service');
+
 const { validateSocket } = require('../helpers/commonFunctions.helper');
 const {
   joinConversationSchema,
@@ -28,6 +33,7 @@ function setupSocket(httpServer) {
 
   io.on('connection', (socket) => {
     const userId = socket.user.id;
+    const userName = socket.user.name || 'User';
     console.log(`User connected: ${userId}`);
 
     socket.join(`user:${userId}`);
@@ -68,6 +74,21 @@ function setupSocket(httpServer) {
           userId
         );
 
+        // Also clear notifications for this conversation
+        const notifCount = await markNotificationsAsReadByRelatedId(
+          userId,
+          validConversationId,
+          'MESSAGE'
+        );
+        if (notifCount > 0) {
+          // Tell the user to refresh their notification list/icon
+          io.to(`user:${userId}`).emit('notifications_updated', {
+            action: 'clear_related',
+            relatedId: validConversationId,
+            type: 'MESSAGE',
+          });
+        }
+
         if (updatedCount > 0) {
           // Notify the room that messages have been read
           io.to(`conversation:${validConversationId}`).emit('messages_read', {
@@ -100,11 +121,29 @@ function setupSocket(httpServer) {
           savedMessage
         );
 
-        // Optionally send push to recipient's personal room
-        io.to(`user:${savedMessage.receiverId}`).emit(
-          'new_notification',
-          savedMessage
-        );
+        // CREATE PERSISTENT NOTIFICATION
+        if (savedMessage.receiverId) {
+          try {
+            const notif = await createNotification({
+              userId: savedMessage.receiverId,
+              title: `New Message from ${userName}`,
+              body:
+                content.length > 50
+                  ? content.substring(0, 50) + '...'
+                  : content,
+              type: 'MESSAGE',
+              relatedId: conversationId,
+            });
+
+            // Emit socket event for real-time update
+            io.to(`user:${savedMessage.receiverId}`).emit(
+              'new_notification',
+              notif
+            );
+          } catch (notifErr) {
+            console.error('Failed to create notification', notifErr);
+          }
+        }
 
         // Check if receiver is online - if not, send Push Notification
         const receiverRoom = io.sockets.adapter.rooms.get(

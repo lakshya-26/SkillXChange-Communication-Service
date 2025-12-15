@@ -47,6 +47,11 @@ const getNotifications = async ({ userId, page = 1, limit = 10 }) => {
  * @param {number} id
  * @param {number} userId - to ensure ownership
  */
+const { getIO } = require('../utilites/socket'); // Can safe import since socket exports getter
+const { markMessagesAsRead: markMsgsService } = require('./message.service');
+
+// ... existing code ...
+
 const markAsRead = async (id, userId) => {
   // Check if exists and belongs to user
   const notification = await prisma.notification.findUnique({
@@ -61,15 +66,47 @@ const markAsRead = async (id, userId) => {
     throw new Error('Unauthorized access to notification');
   }
 
-  return prisma.notification.update({
+  const updatedNotification = await prisma.notification.update({
     where: { id: Number(id) },
     data: { isRead: true },
   });
+
+  // If this was a message notification, verify if we should mark messages as read too
+  if (notification.type === 'MESSAGE' && notification.relatedId) {
+    // Mark messages in conversation as read
+    const count = await markMsgsService(notification.relatedId, userId);
+
+    // If messages were updated, emit event so chat list updates
+    if (count > 0) {
+      try {
+        const io = getIO();
+        io.to(`conversation:${notification.relatedId}`).emit('messages_read', {
+          conversationId: notification.relatedId,
+          readBy: userId,
+        });
+      } catch (e) {
+        console.error('Socket emit failed in markAsRead', e);
+      }
+    }
+  }
+
+  return updatedNotification;
 };
 
-/**
- * Create a notification (Internal usage mostly)
- */
+const markNotificationsAsReadByRelatedId = async (userId, relatedId, type) => {
+  const { count } = await prisma.notification.updateMany({
+    where: {
+      userId: Number(userId),
+      relatedId: Number(relatedId),
+      type: type,
+      isRead: false,
+    },
+    data: { isRead: true },
+  });
+
+  return count;
+};
+
 const createNotification = async (data) => {
   return prisma.notification.create({
     data,
@@ -80,4 +117,5 @@ module.exports = {
   getNotifications,
   markAsRead,
   createNotification,
+  markNotificationsAsReadByRelatedId,
 };
