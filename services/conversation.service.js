@@ -164,7 +164,7 @@ const getChatMessages = async ({ conversationId, page = 1, limit = 20 }) => {
   const [messages, total] = await Promise.all([
     prisma.message.findMany({
       where: { conversationId: Number(conversationId) },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       skip,
       take: limit,
     }),
