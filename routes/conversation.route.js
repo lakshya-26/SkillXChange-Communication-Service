@@ -18,6 +18,14 @@ router.get(
   conversationController.getConversations,
   sendResponse
 );
+
+router.get(
+  '/eligibility',
+  authMiddleware,
+  conversationController.checkEligibility,
+  sendResponse
+);
+
 router.get(
   '/:conversationId',
   authMiddleware,
@@ -32,6 +40,14 @@ router.get(
   conversationValidator.getChatMessagesParams,
   conversationValidator.getChatMessagesQuery,
   conversationController.getChatMessages,
+  sendResponse
+);
+
+router.get(
+  '/:conversationId/stats',
+  authMiddleware,
+  conversationValidator.getChatMessagesParams,
+  conversationController.getConversationStats,
   sendResponse
 );
 
