@@ -234,9 +234,80 @@ const getConversationById = async (conversationId, userId) => {
   };
 };
 
+const getConversationStats = async (conversationId) => {
+  const messages = await prisma.message.groupBy({
+    by: ['senderId'],
+    where: { conversationId: Number(conversationId) },
+    _count: {
+      id: true,
+    },
+  });
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: Number(conversationId) },
+    select: { createdAt: true },
+  });
+
+  if (!conversation) throw new CustomException('Conversation not found', 404);
+
+  return {
+    messagesBySender: messages.map((m) => ({
+      senderId: m.senderId,
+      count: m._count.id,
+    })),
+    createdAt: conversation.createdAt,
+  };
+};
+
+const checkEligibility = async (user1, user2) => {
+  const conversation = await prisma.conversation.findFirst({
+    where: {
+      AND: [
+        { participants: { some: { userId: Number(user1) } } },
+        { participants: { some: { userId: Number(user2) } } },
+      ],
+    },
+  });
+
+  if (!conversation) {
+    return { eligible: false, reason: 'No connection found' };
+  }
+
+  // Check Age (24 hours)
+  const ageHours = (new Date() - new Date(conversation.createdAt)) / 36e5;
+  if (ageHours < 24) {
+    return {
+      eligible: false,
+      reason: 'You Should wait for 24hrs after connecting with the user',
+    };
+  }
+  // Check Messages (5 each)
+  const counts = await prisma.message.groupBy({
+    by: ['senderId'],
+    where: { conversationId: conversation.id },
+    _count: { id: true },
+  });
+
+  const count1 =
+    counts.find((c) => c.senderId === Number(user1))?._count.id || 0;
+  const count2 =
+    counts.find((c) => c.senderId === Number(user2))?._count.id || 0;
+
+  if (count1 < 5 || count2 < 5) {
+    return {
+      eligible: false,
+      reason: `Not enough interaction (User A: ${count1}, User B: ${count2}, Need: 5 each)`,
+    };
+  }
+
+  return { eligible: true, conversationId: conversation.id };
+};
+
 module.exports = {
   createConversation,
   getConversations,
   getChatMessages,
   getConversationById,
+  getConversationStats,
+  checkEligibility,
 };

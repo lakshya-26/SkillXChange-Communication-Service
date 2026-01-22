@@ -65,9 +65,51 @@ const getConversationById = async (req, res, next) => {
   }
 };
 
+const getConversationStats = async (req, res, next) => {
+  try {
+    const conversationId = req.params.conversationId;
+    const stats =
+      await conversationService.getConversationStats(conversationId);
+    req.data = stats;
+    req.statusCode = 200;
+    next();
+  } catch (error) {
+    console.error('Conversation stats error:', error);
+    commonErrorHandler(req, res, error.message, error.statusCode);
+  }
+};
+
+const checkEligibility = async (req, res, next) => {
+  try {
+    const { userA, userB } = req.query;
+    if (!userA || !userB) {
+      throw { statusCode: 400, message: 'Missing userA or userB params' };
+    }
+
+    // Enforce that the requester is 'userA' (the potential rater)
+    if (Number(req.user.id) !== Number(userA)) {
+      throw {
+        statusCode: 403,
+        message: 'Unauthorized to check eligibility for this user',
+      };
+    }
+
+    const result = await conversationService.checkEligibility(userA, userB);
+
+    req.data = result;
+    req.statusCode = 200;
+    next();
+  } catch (error) {
+    console.error('Eligibility check error:', error);
+    commonErrorHandler(req, res, error.message, error.statusCode);
+  }
+};
+
 module.exports = {
   createConversation,
   getConversations,
   getChatMessages,
   getConversationById,
+  getConversationStats,
+  checkEligibility,
 };
